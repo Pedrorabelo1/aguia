@@ -1,0 +1,19 @@
+{
+  "name": "aguia",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "clean": "turbo clean",
+    "db:generate": "pnpm --filter @aguia/db generate",
+    "db:push": "pnpm --filter @aguia/db push",
+    "db:migrate": "pnpm --filter @aguia/db migrate",
+    "db:studio": "pnpm --filter @aguia/db studio"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.0",
+    "typescript": "^5.7.0"
+  }
+}

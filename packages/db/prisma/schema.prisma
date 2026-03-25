@@ -1,0 +1,395 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ═══ MULTI-TENANCY ═══
+
+model Organization {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+
+  // TEMA/IDENTIDADE VISUAL
+  logoUrl         String?
+  faviconUrl      String?
+  primaryColor    String   @default("#3B82F6")
+  secondaryColor  String   @default("#1E40AF")
+  accentColor     String   @default("#F59E0B")
+  bgColor         String   @default("#FFFFFF")
+  sidebarColor    String   @default("#1E293B")
+  fontFamily      String   @default("Inter")
+
+  // META
+  plan        PlanType  @default(STARTER)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // RELATIONS
+  members     Member[]
+  departments Department[]
+  processes   ProcessTemplate[]
+  instances   ProcessInstance[]
+  labels      Label[]
+  invites     Invite[]
+}
+
+enum PlanType {
+  STARTER
+  BUSINESS
+  ENTERPRISE
+}
+
+// ═══ USUÁRIOS E PERMISSÕES ═══
+
+model Member {
+  id             String   @id @default(cuid())
+  clerkUserId    String
+  orgId          String
+  org            Organization @relation(fields: [orgId], references: [id])
+  role           MemberRole   @default(MEMBER)
+  displayName    String
+  email          String
+  avatarUrl      String?
+  isActive       Boolean  @default(true)
+  lastSeenAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // RELATIONS
+  assignedTasks  Task[]       @relation("TaskAssignee")
+  createdTasks   Task[]       @relation("TaskCreator")
+  comments       Comment[]
+  activities     Activity[]
+  notifications  Notification[]
+  departmentMembers DepartmentMember[]
+
+  @@unique([clerkUserId, orgId])
+  @@index([orgId])
+}
+
+enum MemberRole {
+  OWNER
+  ADMIN
+  MANAGER
+  MEMBER
+  VIEWER
+}
+
+model Invite {
+  id        String   @id @default(cuid())
+  email     String
+  role      MemberRole @default(MEMBER)
+  orgId     String
+  org       Organization @relation(fields: [orgId], references: [id])
+  token     String   @unique @default(cuid())
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@unique([email, orgId])
+}
+
+// ═══ DEPARTAMENTOS ═══
+
+model Department {
+  id        String   @id @default(cuid())
+  name      String
+  color     String   @default("#6366F1")
+  icon      String?
+  orgId     String
+  org       Organization @relation(fields: [orgId], references: [id])
+  createdAt DateTime @default(now())
+  members   DepartmentMember[]
+  processes ProcessTemplate[]
+
+  @@index([orgId])
+}
+
+model DepartmentMember {
+  id           String     @id @default(cuid())
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+  memberId     String
+  member       Member     @relation(fields: [memberId], references: [id])
+  isHead       Boolean    @default(false)
+
+  @@unique([departmentId, memberId])
+}
+
+// ═══ PROCESSOS (CORE DO AGUIA) ═══
+
+model ProcessTemplate {
+  id            String   @id @default(cuid())
+  name          String
+  description   String?
+  icon          String?
+  color         String   @default("#8B5CF6")
+  orgId         String
+  org           Organization @relation(fields: [orgId], references: [id])
+  departmentId  String?
+  department    Department?  @relation(fields: [departmentId], references: [id])
+  isTemplate    Boolean  @default(false)
+  isPublished   Boolean  @default(false)
+  version       Int      @default(1)
+
+  // React Flow data (JSON)
+  flowNodes     Json     @default("[]")
+  flowEdges     Json     @default("[]")
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // RELATIONS
+  steps         ProcessStep[]
+  instances     ProcessInstance[]
+
+  @@index([orgId])
+}
+
+model ProcessStep {
+  id               String   @id @default(cuid())
+  processId        String
+  process          ProcessTemplate @relation(fields: [processId], references: [id], onDelete: Cascade)
+  name             String
+  description      String?
+  type             StepType @default(TASK)
+  order            Int
+
+  // Configuração
+  defaultAssigneeRole String?
+  estimatedMinutes    Int?
+  daysFromStart       Int?
+  isRequired          Boolean   @default(true)
+
+  // Condições (JSON para flex)
+  conditions          Json?
+
+  // React Flow node ID
+  flowNodeId          String?
+
+  createdAt           DateTime  @default(now())
+
+  // RELATIONS
+  dependsOn    StepDependency[]  @relation("DependentStep")
+  dependedBy   StepDependency[]  @relation("RequiredStep")
+  taskInstances TaskInstance[]
+
+  @@index([processId])
+}
+
+enum StepType {
+  TASK
+  APPROVAL
+  NOTIFICATION
+  CONDITION
+  SUBPROCESS
+  WAIT
+}
+
+model StepDependency {
+  id              String @id @default(cuid())
+  dependentStepId String
+  dependentStep   ProcessStep @relation("DependentStep", fields: [dependentStepId], references: [id], onDelete: Cascade)
+  requiredStepId  String
+  requiredStep    ProcessStep @relation("RequiredStep", fields: [requiredStepId], references: [id], onDelete: Cascade)
+
+  @@unique([dependentStepId, requiredStepId])
+}
+
+// ═══ INSTÂNCIAS DE PROCESSO ═══
+
+model ProcessInstance {
+  id           String   @id @default(cuid())
+  templateId   String
+  template     ProcessTemplate @relation(fields: [templateId], references: [id])
+  orgId        String
+  org          Organization @relation(fields: [orgId], references: [id])
+  name         String
+  status       InstanceStatus @default(ACTIVE)
+  priority     Priority       @default(MEDIUM)
+  startedAt    DateTime @default(now())
+  dueDate      DateTime?
+  completedAt  DateTime?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // RELATIONS
+  taskInstances TaskInstance[]
+  activities    Activity[]
+
+  @@index([orgId])
+  @@index([templateId])
+}
+
+enum InstanceStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+enum Priority {
+  URGENT
+  HIGH
+  MEDIUM
+  LOW
+}
+
+// ═══ TAREFAS ═══
+
+model TaskInstance {
+  id              String   @id @default(cuid())
+  stepId          String
+  step            ProcessStep @relation(fields: [stepId], references: [id])
+  instanceId      String
+  instance        ProcessInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  status          TaskStatus @default(TODO)
+  priority        Priority   @default(MEDIUM)
+  title           String
+  description     String?
+  dueDate         DateTime?
+  completedAt     DateTime?
+  order           Int        @default(0)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  // RELATIONS
+  task            Task?
+
+  @@index([instanceId])
+  @@index([stepId])
+}
+
+model Task {
+  id              String   @id @default(cuid())
+  taskInstanceId  String?  @unique
+  taskInstance    TaskInstance? @relation(fields: [taskInstanceId], references: [id])
+
+  // Tarefas avulsas (sem processo)
+  title           String
+  description     String?
+  status          TaskStatus @default(TODO)
+  priority        Priority   @default(MEDIUM)
+  dueDate         DateTime?
+  completedAt     DateTime?
+  order           Int        @default(0)
+
+  // Relações
+  assigneeId      String?
+  assignee        Member?   @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  creatorId       String
+  creator         Member    @relation("TaskCreator", fields: [creatorId], references: [id])
+  parentId        String?
+  parent          Task?     @relation("SubTasks", fields: [parentId], references: [id])
+  subtasks        Task[]    @relation("SubTasks")
+
+  comments        Comment[]
+  labels          TaskLabel[]
+  attachments     Attachment[]
+  activities      Activity[]
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([assigneeId])
+  @@index([status])
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  IN_REVIEW
+  BLOCKED
+  DONE
+  CANCELLED
+}
+
+// ═══ COMUNICAÇÃO ═══
+
+model Comment {
+  id        String   @id @default(cuid())
+  content   String
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    Member   @relation(fields: [authorId], references: [id])
+  parentId  String?
+  parent    Comment? @relation("CommentReplies", fields: [parentId], references: [id])
+  replies   Comment[] @relation("CommentReplies")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([taskId])
+}
+
+// ═══ LABELS, ATTACHMENTS, ACTIVITY LOG ═══
+
+model Label {
+  id     String @id @default(cuid())
+  name   String
+  color  String @default("#6366F1")
+  orgId  String
+  org    Organization @relation(fields: [orgId], references: [id])
+  tasks  TaskLabel[]
+
+  @@unique([name, orgId])
+}
+
+model TaskLabel {
+  taskId  String
+  task    Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  labelId String
+  label   Label  @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, labelId])
+}
+
+model Attachment {
+  id        String   @id @default(cuid())
+  name      String
+  url       String
+  size      Int
+  mimeType  String
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model Activity {
+  id          String   @id @default(cuid())
+  type        String
+  data        Json?
+  memberId    String
+  member      Member   @relation(fields: [memberId], references: [id])
+  taskId      String?
+  task        Task?    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  instanceId  String?
+  instance    ProcessInstance? @relation(fields: [instanceId], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@index([taskId])
+  @@index([instanceId])
+  @@index([memberId])
+}
+
+// ═══ NOTIFICAÇÕES ═══
+
+model Notification {
+  id        String   @id @default(cuid())
+  type      String
+  title     String
+  body      String?
+  link      String?
+  isRead    Boolean  @default(false)
+  memberId  String
+  member    Member   @relation(fields: [memberId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@index([memberId, isRead])
+}
