@@ -1,9 +1,10 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { Search, User, Bell } from "lucide-react";
+import { Search, Bell } from "lucide-react";
 import { useState, useEffect } from "react";
 import { NotificationDropdown } from "@/components/notifications/notification-dropdown";
+import { AguiaIcon } from "@/components/logo";
 
 interface OrgData {
   name: string;

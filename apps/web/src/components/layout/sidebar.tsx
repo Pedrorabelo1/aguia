@@ -20,6 +20,7 @@ import {
 import { cn } from "@aguia/ui";
 import { useSidebarStore } from "@/stores/sidebar-store";
 import { useState } from "react";
+import { AguiaLogo, AguiaIcon } from "@/components/logo";
 
 interface OrgData {
   id: string;
@@ -59,33 +60,43 @@ export function Sidebar({ org }: { org: OrgData }) {
       }}
     >
       {/* Logo */}
-      <div className="flex h-16 items-center gap-3 px-4" style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.06)" }}>
-        {org.logoUrl ? (
-          <img
-            src={org.logoUrl}
-            alt={org.name}
-            className="h-8 w-8 flex-shrink-0 rounded-lg object-cover"
-          />
+      <div
+        className="flex h-16 items-center px-4"
+        style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.06)" }}
+      >
+        {collapsed ? (
+          <AguiaIcon size="sm" className="text-aguia-primary mx-auto" />
         ) : (
-          <div
-            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-sm font-bold"
-            style={{
-              background: `linear-gradient(135deg, var(--aguia-primary), var(--aguia-secondary))`,
-              color: "#0B1120",
-            }}
-          >
-            {org.name[0]}
-          </div>
-        )}
-        {!collapsed && (
-          <div className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-semibold text-white">
-              {org.name}
-            </span>
-            <span className="text-[10px] text-dark-200">Workspace</span>
-          </div>
+          <AguiaLogo
+            size="sm"
+            className="text-aguia-primary"
+            textClassName="text-white"
+          />
         )}
       </div>
+
+      {/* Org info */}
+      {!collapsed && (
+        <div className="px-4 py-3" style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.04)" }}>
+          <div className="flex items-center gap-2.5">
+            <div
+              className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg text-xs font-bold"
+              style={{
+                background: "linear-gradient(135deg, var(--aguia-primary), var(--aguia-secondary))",
+                color: "#0B1120",
+              }}
+            >
+              {org.name[0]}
+            </div>
+            <div className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium text-white">
+                {org.name}
+              </span>
+              <span className="text-[10px] text-dark-300">Workspace</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Navigation */}
       <nav className="flex-1 space-y-0.5 p-2 pt-4">
